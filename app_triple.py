@@ -34,11 +34,25 @@ app = Flask(__name__)
 # 進行中のジョブを管理
 jobs: dict[str, dict] = {}
 
-# チェックポイント保存ディレクトリ（既存と分離）
+# ──────────────────────────────────────────────
+# ストレージ設定（Supabase or ローカルファイル）
+# ──────────────────────────────────────────────
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "")
+
+if SUPABASE_URL and SUPABASE_KEY:
+    from supabase import create_client
+    _supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+    USE_SUPABASE = True
+    print("✅ Supabase 接続: 履歴・チェックポイントをDBに永続化")
+else:
+    _supabase = None
+    USE_SUPABASE = False
+    print("📁 ローカルファイルモード: 履歴・チェックポイントをファイルに保存")
+
+# ローカルフォールバック用ディレクトリ
 CHECKPOINT_DIR = Path(__file__).parent / "checkpoints_triple"
 CHECKPOINT_DIR.mkdir(exist_ok=True)
-
-# 履歴保存ディレクトリ（既存と分離）
 HISTORY_DIR = Path(__file__).parent / "history_triple"
 HISTORY_DIR.mkdir(exist_ok=True)
 MAX_HISTORY = 50
@@ -963,7 +977,13 @@ _checkpoint_lock = threading.Lock()
 
 
 def save_checkpoint(cp_id: str, data: dict) -> None:
-    """チェックポイントをJSONファイルに保存（スレッドセーフ）"""
+    """チェックポイントを保存（スレッドセーフ）"""
+    if USE_SUPABASE:
+        try:
+            _supabase.table("checkpoints").upsert({"id": cp_id, "data": data}).execute()
+        except Exception as e:
+            print(f"⚠️ Supabase checkpoint save error: {e}")
+        return
     with _checkpoint_lock:
         cp_path = CHECKPOINT_DIR / f"{cp_id}.json"
         cp_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -971,14 +991,55 @@ def save_checkpoint(cp_id: str, data: dict) -> None:
 
 def load_checkpoint(cp_id: str) -> dict | None:
     """チェックポイントを読み込む。存在しなければNone"""
+    if USE_SUPABASE:
+        try:
+            res = _supabase.table("checkpoints").select("data").eq("id", cp_id).execute()
+            if res.data:
+                return res.data[0]["data"]
+        except Exception as e:
+            print(f"⚠️ Supabase checkpoint load error: {e}")
+        return None
     cp_path = CHECKPOINT_DIR / f"{cp_id}.json"
     if cp_path.exists():
         return json.loads(cp_path.read_text(encoding="utf-8"))
     return None
 
 
+def delete_checkpoint(cp_id: str) -> None:
+    """チェックポイントを削除"""
+    if USE_SUPABASE:
+        try:
+            _supabase.table("checkpoints").delete().eq("id", cp_id).execute()
+        except Exception as e:
+            print(f"⚠️ Supabase checkpoint delete error: {e}")
+        return
+    cp_path = CHECKPOINT_DIR / f"{cp_id}.json"
+    if cp_path.exists():
+        cp_path.unlink()
+
+
 def list_checkpoints() -> list[dict]:
-    """保存済みチェックポイント一覧を返す（新しい順）"""
+    """保存済みチェックポイント一覧を返す（新しい順、最大10件）"""
+    if USE_SUPABASE:
+        try:
+            res = _supabase.table("checkpoints").select("id, data, created_at").order("created_at", desc=True).limit(10).execute()
+            result = []
+            for row in res.data:
+                d = row["data"]
+                result.append({
+                    "id": row["id"],
+                    "mode": "triple",
+                    "completed_step": d.get("completed_step", 0),
+                    "material_preview": d.get("material", "")[:80],
+                    "title_preview": d.get("tentative_title", "")[:40],
+                    "purpose_preview": d.get("purpose", "")[:60],
+                    "timestamp": d.get("timestamp", ""),
+                    "error": d.get("error", ""),
+                })
+            return result
+        except Exception as e:
+            print(f"⚠️ Supabase checkpoint list error: {e}")
+            return []
     result = []
     for f in sorted(CHECKPOINT_DIR.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
         try:
@@ -1006,6 +1067,18 @@ def save_history(job_id: str, data: dict) -> None:
     """完了ジョブを履歴に保存。上限超過時は古いものを削除。"""
     data["job_id"] = job_id
     data["completed_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
+    if USE_SUPABASE:
+        try:
+            _supabase.table("history").upsert({"job_id": job_id, "data": data}).execute()
+            # MAX_HISTORY 制限: 古いものを削除
+            res = _supabase.table("history").select("job_id, created_at").order("created_at", desc=True).execute()
+            if len(res.data) > MAX_HISTORY:
+                old_ids = [r["job_id"] for r in res.data[MAX_HISTORY:]]
+                for old_id in old_ids:
+                    _supabase.table("history").delete().eq("job_id", old_id).execute()
+        except Exception as e:
+            print(f"⚠️ Supabase history save error: {e}")
+        return
     h_path = HISTORY_DIR / f"{job_id}.json"
     h_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
     files = sorted(HISTORY_DIR.glob("*.json"), key=lambda p: p.stat().st_mtime)
@@ -1016,6 +1089,25 @@ def save_history(job_id: str, data: dict) -> None:
 
 def list_history() -> list[dict]:
     """履歴一覧を返す（新しい順）"""
+    if USE_SUPABASE:
+        try:
+            res = _supabase.table("history").select("job_id, data, created_at").order("created_at", desc=True).limit(MAX_HISTORY).execute()
+            result = []
+            for row in res.data:
+                d = row["data"]
+                result.append({
+                    "job_id": row["job_id"],
+                    "completed_at": d.get("completed_at", ""),
+                    "title_preview": d.get("tentative_title", "")[:40],
+                    "purpose_preview": d.get("purpose", "")[:60],
+                    "material_preview": d.get("material", "")[:80],
+                    "total_elapsed": d.get("total_elapsed", 0),
+                    "mode": "triple",
+                })
+            return result
+        except Exception as e:
+            print(f"⚠️ Supabase history list error: {e}")
+            return []
     result = []
     for f in sorted(HISTORY_DIR.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
         try:
@@ -1036,6 +1128,14 @@ def list_history() -> list[dict]:
 
 def load_history(job_id: str) -> dict | None:
     """特定の履歴データを読み込む"""
+    if USE_SUPABASE:
+        try:
+            res = _supabase.table("history").select("data").eq("job_id", job_id).execute()
+            if res.data:
+                return res.data[0]["data"]
+        except Exception as e:
+            print(f"⚠️ Supabase history load error: {e}")
+        return None
     h_path = HISTORY_DIR / f"{job_id}.json"
     if h_path.exists():
         return json.loads(h_path.read_text(encoding="utf-8"))
@@ -1997,9 +2097,7 @@ async def run_triple_pipeline(
         })
 
         # 完了 → チェックポイント削除
-        cp_path = CHECKPOINT_DIR / f"{cp_id}.json"
-        if cp_path.exists():
-            cp_path.unlink()
+        delete_checkpoint(cp_id)
 
         event_queue.put({
             "type": "complete",
@@ -2160,6 +2258,14 @@ def download_history(job_id):
 @app.route("/api/history/<job_id>", methods=["DELETE"])
 def delete_history(job_id):
     """履歴を削除"""
+    if USE_SUPABASE:
+        try:
+            res = _supabase.table("history").delete().eq("job_id", job_id).execute()
+            if not res.data:
+                return jsonify({"error": "履歴が見つかりません"}), 404
+            return jsonify({"ok": True})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
     h_path = HISTORY_DIR / f"{job_id}.json"
     if not h_path.exists():
         return jsonify({"error": "履歴が見つかりません"}), 404
