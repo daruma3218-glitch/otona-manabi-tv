@@ -2213,6 +2213,23 @@ def resume_job():
     return jsonify({"job_id": job_id, "resume_from_step": cp_data.get("completed_step", 0) + 1})
 
 
+@app.route("/api/health")
+def health_check():
+    """Supabase接続診断"""
+    info = {"supabase": USE_SUPABASE, "url_set": bool(SUPABASE_URL), "key_set": bool(SUPABASE_KEY)}
+    if USE_SUPABASE:
+        try:
+            res = _supabase.table("history").select("job_id", count="exact").limit(1).execute()
+            info["db_connected"] = True
+            info["history_count"] = res.count if res.count is not None else len(res.data)
+            res2 = _supabase.table("checkpoints").select("id", count="exact").limit(1).execute()
+            info["checkpoints_count"] = res2.count if res2.count is not None else len(res2.data)
+        except Exception as e:
+            info["db_connected"] = False
+            info["error"] = str(e)
+    return jsonify(info)
+
+
 @app.route("/api/checkpoints")
 def get_checkpoints():
     """保存済みチェックポイント一覧を返す"""
