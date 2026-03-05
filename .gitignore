@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+.env
+.claude/
+checkpoints/
+checkpoints_triple/
+history/
+history_triple/
+*.log

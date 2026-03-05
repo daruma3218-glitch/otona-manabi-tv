@@ -1,0 +1,1330 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Manuscript Workflow v2</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 2rem 1.5rem;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        header h1 {
+            font-size: 1.8rem;
+            background: linear-gradient(135deg, #60a5fa, #a78bfa, #f472b6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 0.5rem;
+        }
+
+        header p {
+            color: #94a3b8;
+            font-size: 0.9rem;
+        }
+
+        /* 入力エリア */
+        .input-section {
+            background: #1e293b;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            border: 1px solid #334155;
+        }
+
+        .input-section label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: #cbd5e1;
+        }
+
+        textarea, input[type="text"] {
+            width: 100%;
+            background: #0f172a;
+            border: 1px solid #475569;
+            border-radius: 8px;
+            padding: 1rem;
+            color: #e2e8f0;
+            font-size: 0.95rem;
+            line-height: 1.7;
+            resize: vertical;
+            font-family: inherit;
+        }
+
+        input[type="text"] {
+            resize: none;
+            line-height: 1.4;
+        }
+
+        textarea:focus, input[type="text"]:focus {
+            outline: none;
+            border-color: #60a5fa;
+            box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.2);
+        }
+
+        #material { min-height: 200px; }
+        #purpose { min-height: 60px; margin-top: 0.3rem; }
+
+        .instruction-hint {
+            font-size: 0.78rem;
+            color: #64748b;
+            margin-top: 0.3rem;
+        }
+
+        .settings-row {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .settings-row .field {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .settings-row label {
+            font-size: 0.85rem;
+            margin-bottom: 0.3rem;
+        }
+
+        input[type="password"], select {
+            width: 100%;
+            background: #0f172a;
+            border: 1px solid #475569;
+            border-radius: 8px;
+            padding: 0.6rem 0.8rem;
+            color: #e2e8f0;
+            font-size: 0.9rem;
+        }
+
+        .search-option {
+            margin-top: 1rem;
+        }
+
+        .checkbox-label {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.6rem;
+            cursor: pointer;
+        }
+
+        .checkbox-label input[type="checkbox"] {
+            margin-top: 3px;
+        }
+
+        .checkbox-text {
+            font-size: 0.9rem;
+            color: #cbd5e1;
+        }
+
+        .checkbox-desc {
+            display: block;
+            font-size: 0.78rem;
+            color: #64748b;
+        }
+
+        .char-count {
+            text-align: right;
+            font-size: 0.78rem;
+            color: #64748b;
+            margin-top: 0.3rem;
+        }
+
+        .file-upload {
+            margin-top: 0.5rem;
+        }
+
+        .file-upload label {
+            font-size: 0.82rem;
+            color: #64748b;
+        }
+
+        .file-upload input[type="file"] {
+            font-size: 0.82rem;
+            color: #94a3b8;
+        }
+
+        .btn-run {
+            width: 100%;
+            padding: 0.9rem;
+            margin-top: 1.2rem;
+            background: linear-gradient(135deg, #3b82f6, #6366f1);
+            color: #fff;
+            font-size: 1rem;
+            font-weight: 700;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        .btn-run:hover { opacity: 0.9; }
+        .btn-run:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* 結果セクション */
+        .results-section {
+            display: none;
+            margin-top: 1.5rem;
+        }
+
+        .results-section.visible { display: block; }
+
+        .steps {
+            display: flex;
+            gap: 0.4rem;
+            flex-wrap: wrap;
+            margin-bottom: 1rem;
+        }
+
+        .step-badge {
+            padding: 0.4rem 0.7rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            background: #334155;
+            color: #94a3b8;
+            transition: all 0.3s;
+        }
+
+        .step-badge.active {
+            background: #1d4ed8;
+            color: #dbeafe;
+            animation: pulse 1.5s infinite;
+        }
+
+        .step-badge.done {
+            background: #166534;
+            color: #bbf7d0;
+        }
+
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.7; } }
+
+        /* 専門家・レビュアーカード */
+        .experts-grid, .reviewers-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 0.8rem;
+            margin-bottom: 1rem;
+        }
+
+        .expert-card, .reviewer-card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            padding: 0.8rem;
+            text-align: center;
+            transition: all 0.3s;
+        }
+
+        .expert-card.waiting, .reviewer-card.waiting { border-color: #475569; }
+        .expert-card.running, .reviewer-card.running {
+            border-color: #3b82f6;
+            box-shadow: 0 0 12px rgba(59, 130, 246, 0.2);
+        }
+        .expert-card.done, .reviewer-card.done { border-color: #22c55e; }
+
+        .expert-num, .reviewer-num { font-size: 1.5rem; margin-bottom: 0.3rem; }
+        .expert-name, .reviewer-name { font-size: 0.85rem; color: #cbd5e1; margin-bottom: 0.2rem; }
+        .expert-status, .reviewer-status { font-size: 0.75rem; color: #64748b; }
+        .expert-card.running .expert-status, .reviewer-card.running .reviewer-status { color: #60a5fa; }
+        .expert-card.done .expert-status, .reviewer-card.done .reviewer-status { color: #22c55e; }
+
+        /* パネル */
+        .panel {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            margin-bottom: 0.8rem;
+            overflow: hidden;
+        }
+
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.7rem 1rem;
+            cursor: pointer;
+            background: #1e293b;
+        }
+
+        .panel-header:hover { background: #263548; }
+
+        .panel-header h3 { font-size: 0.9rem; color: #cbd5e1; }
+
+        .toggle {
+            font-size: 0.8rem;
+            color: #64748b;
+            transition: transform 0.2s;
+        }
+
+        .toggle.open { transform: rotate(180deg); }
+
+        .panel-body {
+            display: none;
+            padding: 1rem;
+            font-size: 0.88rem;
+            line-height: 1.8;
+            white-space: pre-wrap;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .panel-body.visible { display: block; }
+
+        /* 最終原稿 */
+        .final-panel {
+            display: none;
+            background: linear-gradient(135deg, #1e3a5f, #1e293b);
+            border: 2px solid #3b82f6;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-top: 1rem;
+        }
+
+        .final-panel h2 {
+            font-size: 1.1rem;
+            color: #93c5fd;
+            margin-bottom: 1rem;
+        }
+
+        .final-content {
+            white-space: pre-wrap;
+            line-height: 1.8;
+            font-size: 0.95rem;
+            max-height: 800px;
+            overflow-y: auto;
+        }
+
+        .btn-copy {
+            margin-top: 1rem;
+            padding: 0.6rem 1.5rem;
+            background: #3b82f6;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+        }
+
+        .btn-copy:hover { opacity: 0.9; }
+
+        /* 参考文献・出典リスト */
+        .reference-panel {
+            display: none;
+            background: linear-gradient(135deg, #1e293b, #1a2332);
+            border: 2px solid #8b5cf6;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-top: 1rem;
+        }
+
+        .reference-panel h2 {
+            font-size: 1.1rem;
+            color: #c4b5fd;
+            margin-bottom: 1rem;
+        }
+
+        .reference-content {
+            white-space: pre-wrap;
+            line-height: 1.8;
+            font-size: 0.9rem;
+            max-height: 700px;
+            overflow-y: auto;
+        }
+
+        .btn-copy-ref {
+            margin-top: 1rem;
+            padding: 0.6rem 1.5rem;
+            background: #8b5cf6;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+        }
+
+        .btn-copy-ref:hover { opacity: 0.9; }
+
+        /* バナー */
+        .complete-banner {
+            display: none;
+            text-align: center;
+            padding: 0.8rem;
+            border-radius: 8px;
+            margin-top: 1rem;
+            font-weight: 600;
+        }
+
+        .complete-banner.visible { display: block; }
+
+        /* エラー */
+        .error-msg {
+            display: none;
+            background: #7f1d1d;
+            border: 1px solid #ef4444;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            color: #fca5a5;
+        }
+
+        .error-msg.visible { display: block; }
+
+        .error-resume-btn {
+            margin-top: 0.6rem;
+            padding: 0.5rem 1rem;
+            background: #d97706;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+        }
+
+        /* 再開セクション */
+        .resume-section {
+            display: none;
+            background: #1e293b;
+            border: 1px solid #d97706;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .resume-section.visible { display: block; }
+
+        .resume-section h3 { font-size: 0.95rem; color: #fbbf24; margin-bottom: 1rem; }
+
+        .checkpoint-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.7rem;
+            border-bottom: 1px solid #334155;
+        }
+
+        .checkpoint-info { flex: 1; }
+
+        .cp-step {
+            font-weight: 600;
+            color: #fbbf24;
+        }
+
+        .cp-preview {
+            font-size: 0.78rem;
+            color: #64748b;
+            margin-top: 0.2rem;
+        }
+
+        .cp-error {
+            font-size: 0.78rem;
+            color: #f87171;
+            margin-top: 0.2rem;
+        }
+
+        .btn-resume {
+            padding: 0.4rem 1rem;
+            background: #d97706;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.82rem;
+        }
+
+        .btn-resume:hover { opacity: 0.85; }
+
+        /* 履歴 */
+        .history-section {
+            display: none;
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 1rem 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .history-section.visible { display: block; }
+
+        .history-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+        }
+
+        .history-header h3 { font-size: 0.9rem; color: #94a3b8; }
+
+        .history-list {
+            display: none;
+            margin-top: 0.8rem;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .history-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.6rem 0;
+            border-bottom: 1px solid #334155;
+        }
+
+        .history-info { flex: 1; }
+        .hi-date { font-size: 0.75rem; color: #64748b; }
+        .hi-title { font-size: 0.85rem; color: #e2e8f0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 500px; }
+        .hi-material { font-size: 0.75rem; color: #475569; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 400px; }
+        .hi-elapsed { font-size: 0.75rem; color: #6366f1; }
+
+        .history-actions { display: flex; gap: 0.3rem; }
+
+        .btn-hist {
+            padding: 0.3rem 0.6rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.75rem;
+        }
+
+        .btn-hist.view { background: #1e3a5f; color: #93c5fd; }
+        .btn-hist.download { background: #14532d; color: #86efac; }
+        .btn-hist.delete {
+            background: #475569;
+            color: #f87171;
+        }
+
+        .btn-hist:hover { opacity: 0.85; }
+
+        /* セクション区切り用ラベル */
+        .section-label {
+            font-size: 0.82rem;
+            color: #64748b;
+            margin: 1rem 0 0.5rem 0;
+            padding-left: 0.3rem;
+            border-left: 3px solid #6366f1;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>AI Manuscript Workflow v2</h1>
+            <p>仮タイトル＆趣旨 → 自動リサーチ/資料入力 → 情報収集 → 原稿化 → 批評 → 意見選定 → リライト → ファクトチェック</p>
+        </header>
+
+        <!-- 履歴セクション -->
+        <div class="history-section" id="historySection">
+            <div class="history-header" onclick="toggleHistorySection()">
+                <h3>📋 過去の結果 (<span id="historyCount">0</span>件)</h3>
+                <span class="toggle" id="historyToggle">▼</span>
+            </div>
+            <div class="history-list" id="historyList"></div>
+        </div>
+
+        <!-- 入力セクション -->
+        <div class="input-section">
+            <label for="tentativeTitle">仮タイトル</label>
+            <input type="text" id="tentativeTitle" placeholder="動画の仮タイトルを入力してください">
+
+            <div style="margin-top: 1.2rem;">
+                <label for="purpose">趣旨</label>
+                <textarea id="purpose" placeholder="この動画の趣旨・テーマ・伝えたいことを入力してください"></textarea>
+                <div class="instruction-hint">動画の方向性やテーマを記載してください</div>
+            </div>
+
+            <div class="search-option" style="margin-top: 1.2rem;">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="autoResearch" onchange="toggleAutoResearch()">
+                    <span class="checkbox-text">資料を自動リサーチ（タイトルと趣旨だけでOK）</span>
+                    <span class="checkbox-desc">AIがWeb検索20回以上で多角的にリサーチし、資料テキストを自動生成します</span>
+                </label>
+            </div>
+
+            <div id="materialSection" style="margin-top: 1.2rem;">
+                <label for="material">資料テキスト</label>
+                <textarea id="material" placeholder="ここに資料を貼り付けてください..."></textarea>
+                <div class="char-count"><span id="charCount">0</span> 文字</div>
+
+                <div class="file-upload">
+                    <label for="fileInput">テキストファイルから読み込み</label>
+                    <input type="file" id="fileInput" accept=".txt,.md">
+                </div>
+            </div>
+
+            <div class="settings-row">
+                <div class="field">
+                    <label for="apiKey">Anthropic API Key</label>
+                    <input type="password" id="apiKey" placeholder="sk-ant-...（環境変数設定済みなら空でOK）">
+                </div>
+                <div class="field">
+                    <label for="model">分析モデル（原稿化・リライトは自動でOpus 4.6）</label>
+                    <select id="model">
+                        <option value="claude-sonnet-4-5-20250929">Claude Sonnet 4.5 (推奨)</option>
+                        <option value="claude-sonnet-4-20250514">Claude Sonnet 4</option>
+                        <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 (高速・低コスト)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="search-option">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="useSearch" checked>
+                    <span class="checkbox-text">最新情報をWeb検索で取得</span>
+                    <span class="checkbox-desc">各専門家がWeb検索で最新データを確認してからチェックします（処理時間が少し長くなります）</span>
+                </label>
+            </div>
+
+            <button class="btn-run" id="btnRun" onclick="startJob()">
+                ワークフロー開始
+            </button>
+        </div>
+
+        <!-- 再開セクション -->
+        <div class="resume-section" id="resumeSection">
+            <h3>💾 中断されたジョブがあります — 途中から再開できます</h3>
+            <div id="checkpointList"></div>
+        </div>
+
+        <!-- エラー表示 -->
+        <div class="error-msg" id="errorMsg"></div>
+
+        <!-- 結果セクション -->
+        <div class="results-section" id="resultsSection">
+            <!-- ステップ表示 -->
+            <div class="steps" id="steps">
+                <div class="step-badge" id="step0" style="display:none;">0: 自動リサーチ</div>
+                <div class="step-badge" id="step1">1: 分野選定</div>
+                <div class="step-badge" id="step2">2: 情報収集</div>
+                <div class="step-badge" id="step3">3: 原稿化</div>
+                <div class="step-badge" id="step4">4: 批評</div>
+                <div class="step-badge" id="step5">5: 意見選定</div>
+                <div class="step-badge" id="step6">6: リライト</div>
+                <div class="step-badge" id="step7">7: ファクトチェック</div>
+            </div>
+
+            <!-- 自動リサーチ結果（Step 0） -->
+            <div class="panel draft-panel" id="autoResearchPanel" style="display:none;">
+                <div class="panel-header" onclick="togglePanel(this)">
+                    <h3>Step 0: 自動リサーチ結果</h3>
+                    <span class="toggle">&#9660;</span>
+                </div>
+                <div class="panel-body" id="autoResearchContent"></div>
+            </div>
+
+            <!-- 専門家カード（Step 2） -->
+            <div class="section-label" id="expertsLabel" style="display:none;">Step 2: 情報収集エージェント</div>
+            <div class="experts-grid" id="expertsGrid"></div>
+
+            <!-- 専門家レビュー結果 -->
+            <div id="reviewPanels"></div>
+
+            <!-- 中間原稿パネル（Step 3） -->
+            <div class="panel draft-panel" id="draftPanel" style="display:none;">
+                <div class="panel-header" onclick="togglePanel(this)">
+                    <h3>Step 3: 中間原稿</h3>
+                    <span class="toggle">&#9660;</span>
+                </div>
+                <div class="panel-body" id="draftContent"></div>
+            </div>
+
+            <!-- レビュアーカード（Step 4） -->
+            <div class="section-label" id="reviewersLabel" style="display:none;">Step 4: 批評エージェント</div>
+            <div class="reviewers-grid" id="reviewersGrid"></div>
+
+            <!-- レビュアー批評結果 -->
+            <div id="reviewerPanels"></div>
+
+            <!-- 意見選定パネル（Step 5） -->
+            <div class="panel" id="opinionsPanel" style="display:none;">
+                <div class="panel-header" onclick="togglePanel(this)">
+                    <h3>Step 5: 意見選定結果</h3>
+                    <span class="toggle">&#9660;</span>
+                </div>
+                <div class="panel-body" id="opinionsContent"></div>
+            </div>
+
+            <!-- リライト結果パネル（Step 6） -->
+            <div class="panel" id="rewritePanel" style="display:none;">
+                <div class="panel-header" onclick="togglePanel(this)">
+                    <h3>Step 6: リライト結果</h3>
+                    <span class="toggle">&#9660;</span>
+                </div>
+                <div class="panel-body" id="rewriteContent"></div>
+            </div>
+
+            <!-- ファクトチェック結果パネル（Step 7） -->
+            <div class="panel fact-check-panel" id="factCheckPanel" style="display:none;">
+                <div class="panel-header" onclick="togglePanel(this)">
+                    <h3>Step 7: ファクトチェック結果</h3>
+                    <span class="toggle">&#9660;</span>
+                </div>
+                <div class="panel-body" id="factCheckContent"></div>
+            </div>
+
+            <!-- 参考文献・出典リスト -->
+            <div class="reference-panel" id="referencePanel" style="display:none;">
+                <h2>参考文献・出典リスト</h2>
+                <div class="reference-content" id="referenceContent"></div>
+                <button class="btn-copy-ref" onclick="copyReference()">出典リストをコピー</button>
+            </div>
+
+            <!-- 最終原稿 -->
+            <div class="final-panel" id="finalPanel" style="display:none;">
+                <h2>最終原稿</h2>
+                <div class="final-content" id="finalContent"></div>
+                <button class="btn-copy" onclick="copyFinal()">最終原稿をコピー</button>
+            </div>
+
+            <!-- 完了バナー -->
+            <div class="complete-banner" id="completeBanner"></div>
+        </div>
+    </div>
+
+    <script>
+        const materialArea = document.getElementById('material');
+        const charCount = document.getElementById('charCount');
+
+        materialArea.addEventListener('input', () => {
+            charCount.textContent = materialArea.value.length.toLocaleString();
+        });
+
+        // ファイル読み込み
+        document.getElementById('fileInput').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                materialArea.value = ev.target.result;
+                charCount.textContent = materialArea.value.length.toLocaleString();
+            };
+            reader.readAsText(file);
+        });
+
+        let expertNames = [];
+        let reviewerNames = [];
+        let lastCheckpointId = null;
+
+        // ページ読み込み時にチェックポイント一覧を取得
+        (function loadCheckpoints() {
+            fetch('/api/checkpoints')
+                .then(r => r.json())
+                .then(data => {
+                    const cps = data.checkpoints || [];
+                    if (cps.length === 0) return;
+                    const section = document.getElementById('resumeSection');
+                    const list = document.getElementById('checkpointList');
+                    list.innerHTML = '';
+                    cps.forEach(cp => {
+                        const stepLabel = `Step ${cp.completed_step}/${cp.total_steps} 完了`;
+                        const div = document.createElement('div');
+                        div.className = 'checkpoint-item';
+                        div.innerHTML = `
+                            <div class="checkpoint-info">
+                                <div><span class="cp-step">${stepLabel}</span> — ${cp.timestamp || ''}</div>
+                                <div class="cp-preview">${escapeHtml(cp.title_preview || '')} | ${escapeHtml(cp.material_preview || '').substring(0, 50)}...</div>
+                                ${cp.error ? '<div class="cp-error">エラー: ' + escapeHtml(cp.error).substring(0, 80) + '</div>' : ''}
+                            </div>
+                            <button class="btn-resume" onclick="resumeFromCheckpoint('${cp.id}')">Step ${cp.completed_step + 1} から再開</button>
+                        `;
+                        list.appendChild(div);
+                    });
+                    section.classList.add('visible');
+                })
+                .catch(() => {});
+        })();
+
+        function resumeFromCheckpoint(cpId) {
+            const apiKey = document.getElementById('apiKey').value.trim();
+
+            hideError();
+            document.getElementById('btnRun').disabled = true;
+            document.getElementById('btnRun').textContent = '再開中...';
+            document.getElementById('resultsSection').classList.add('visible');
+            resetAllPanels();
+            resetSteps();
+            expertNames = [];
+            reviewerNames = [];
+
+            fetch('/api/resume', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ checkpoint_id: cpId, api_key: apiKey }),
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.error) {
+                    showError(data.error);
+                    resetButton();
+                    return;
+                }
+                listenToStream(data.job_id);
+            })
+            .catch(err => {
+                showError('通信エラー: ' + err.message);
+                resetButton();
+            });
+        }
+
+        function toggleAutoResearch() {
+            const checked = document.getElementById('autoResearch').checked;
+            const section = document.getElementById('materialSection');
+            section.style.display = checked ? 'none' : 'block';
+        }
+
+        function startJob() {
+            const autoResearch = document.getElementById('autoResearch').checked;
+            const material = materialArea.value.trim();
+            const tentativeTitle = document.getElementById('tentativeTitle').value.trim();
+            const purpose = document.getElementById('purpose').value.trim();
+            const apiKey = document.getElementById('apiKey').value.trim();
+            const model = document.getElementById('model').value;
+            const useSearch = document.getElementById('useSearch').checked;
+
+            if (!tentativeTitle) {
+                showError('仮タイトルを入力してください');
+                return;
+            }
+            if (!purpose) {
+                showError('趣旨を入力してください');
+                return;
+            }
+            if (!material && !autoResearch) {
+                showError('資料を入力するか、自動リサーチを有効にしてください');
+                return;
+            }
+
+            hideError();
+            document.getElementById('btnRun').disabled = true;
+            document.getElementById('btnRun').textContent = '処理中...';
+            document.getElementById('resultsSection').classList.add('visible');
+            resetAllPanels();
+            resetSteps();
+            expertNames = [];
+            reviewerNames = [];
+
+            // 自動リサーチONならStep 0バッジを表示
+            if (autoResearch) {
+                document.getElementById('step0').style.display = '';
+            }
+
+            fetch('/api/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    material: autoResearch ? '' : material,
+                    tentative_title: tentativeTitle,
+                    purpose,
+                    api_key: apiKey,
+                    model,
+                    use_search: useSearch,
+                    auto_research: autoResearch,
+                }),
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.error) {
+                    showError(data.error);
+                    resetButton();
+                    return;
+                }
+                listenToStream(data.job_id);
+            })
+            .catch(err => {
+                showError('通信エラー: ' + err.message);
+                resetButton();
+            });
+        }
+
+        function resetAllPanels() {
+            document.getElementById('autoResearchPanel').style.display = 'none';
+            document.getElementById('expertsGrid').innerHTML = '';
+            document.getElementById('reviewPanels').innerHTML = '';
+            document.getElementById('reviewersGrid').innerHTML = '';
+            document.getElementById('reviewerPanels').innerHTML = '';
+            document.getElementById('draftPanel').style.display = 'none';
+            document.getElementById('opinionsPanel').style.display = 'none';
+            document.getElementById('rewritePanel').style.display = 'none';
+            document.getElementById('factCheckPanel').style.display = 'none';
+            document.getElementById('referencePanel').style.display = 'none';
+            document.getElementById('finalPanel').style.display = 'none';
+            document.getElementById('completeBanner').classList.remove('visible');
+            document.getElementById('resumeSection').classList.remove('visible');
+            document.getElementById('expertsLabel').style.display = 'none';
+            document.getElementById('reviewersLabel').style.display = 'none';
+        }
+
+        function listenToStream(jobId) {
+            const source = new EventSource('/api/stream/' + jobId);
+
+            source.onmessage = (e) => {
+                const event = JSON.parse(e.data);
+
+                switch (event.type) {
+                    case 'step':
+                        activateStep(event.step);
+                        break;
+
+                    case 'auto_research_done':
+                        completeStep(0);
+                        // リサーチ結果をresearchPanelに表示
+                        renderAutoResearch(event.material);
+                        break;
+
+                    case 'fields_selected':
+                        expertNames = event.fields;
+                        renderExpertCards(event.fields);
+                        completeStep(1);
+                        break;
+
+                    case 'expert_start':
+                        setExpertStatus(event.index, 'running', 'リサーチ中...');
+                        break;
+
+                    case 'expert_done':
+                        setExpertStatus(event.index, 'done', event.elapsed + '秒');
+                        addExpertReviewPanel(event.index, event.name, event.review);
+                        break;
+
+                    case 'draft_done':
+                        completeStep(2);
+                        completeStep(3);
+                        showDraft(event.draft);
+                        break;
+
+                    case 'reviewer_start':
+                        setReviewerStatus(event.index, 'running', '批評中...');
+                        break;
+
+                    case 'reviewer_done':
+                        setReviewerStatus(event.index, 'done', event.elapsed + '秒');
+                        addReviewerPanel(event.index, event.name, event.review);
+                        break;
+
+                    case 'opinions_selected':
+                        completeStep(4);
+                        completeStep(5);
+                        showOpinions(event.opinions);
+                        break;
+
+                    case 'rewrite_done':
+                        completeStep(6);
+                        showRewrite(event.rewritten);
+                        break;
+
+                    case 'fact_check_done':
+                        showFactCheck(event.fact_report);
+                        break;
+
+                    case 'reference_list_done':
+                        showReferenceList(event.reference_list);
+                        break;
+
+                    case 'complete':
+                        completeStep(7);
+                        showFinal(event.final);
+                        if (event.reference_list) {
+                            showReferenceList(event.reference_list);
+                        }
+                        showComplete(event.total_elapsed);
+                        resetButton();
+                        loadHistory();
+                        source.close();
+                        break;
+
+                    case 'continuation':
+                        showContinuation(event.message);
+                        break;
+
+                    case 'restore_step':
+                        completeStep(event.step);
+                        break;
+
+                    case 'error':
+                        if (event.checkpoint_id) {
+                            lastCheckpointId = event.checkpoint_id;
+                            showErrorWithResume(event.message, event.checkpoint_id);
+                        } else {
+                            showError(event.message);
+                        }
+                        resetButton();
+                        source.close();
+                        break;
+                }
+            };
+
+            source.onerror = () => {
+                source.close();
+            };
+        }
+
+        // ステップ管理
+        function resetSteps() {
+            for (let i = 0; i <= 7; i++) {
+                const el = document.getElementById('step' + i);
+                if (el) el.className = 'step-badge';
+            }
+            // Step 0は自動リサーチOFF時は非表示に戻す
+            document.getElementById('step0').style.display = 'none';
+        }
+
+        function activateStep(n) {
+            const el = document.getElementById('step' + n);
+            if (el) el.className = 'step-badge active';
+        }
+
+        function completeStep(n) {
+            const el = document.getElementById('step' + n);
+            if (el) el.className = 'step-badge done';
+        }
+
+        function renderAutoResearch(material) {
+            const panel = document.getElementById('autoResearchPanel');
+            const content = document.getElementById('autoResearchContent');
+            panel.style.display = 'block';
+            content.innerHTML = '<pre style="white-space:pre-wrap;word-wrap:break-word;font-size:0.85rem;line-height:1.6;">' + escapeHtml(material) + '</pre>';
+        }
+
+        // 専門家カード（Step 2）
+        function renderExpertCards(fields) {
+            const grid = document.getElementById('expertsGrid');
+            grid.innerHTML = '';
+            document.getElementById('expertsLabel').style.display = 'block';
+            const emojis = ['🔬', '🏛️', '📜', '📊', '📋'];
+            fields.forEach((f, i) => {
+                const card = document.createElement('div');
+                card.className = 'expert-card waiting';
+                card.id = 'expert-card-' + i;
+                card.innerHTML = `
+                    <div class="expert-num">${emojis[i] || '📋'}</div>
+                    <div class="expert-name">${f.name}</div>
+                    <div class="expert-status">待機中</div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        function setExpertStatus(index, status, text) {
+            const card = document.getElementById('expert-card-' + index);
+            if (!card) return;
+            card.className = 'expert-card ' + status;
+            card.querySelector('.expert-status').textContent = text;
+        }
+
+        // レビュアーカード（Step 4）
+        function renderReviewerCards() {
+            const grid = document.getElementById('reviewersGrid');
+            grid.innerHTML = '';
+            document.getElementById('reviewersLabel').style.display = 'block';
+            const names = ['論証審査官', '初見視聴者', '視聴維持率コンサルタント', '世論感覚チェッカー', 'コピーライター'];
+            const emojis = ['⚖️', '👤', '📊', '🗳️', '✍️'];
+            reviewerNames = names;
+            names.forEach((name, i) => {
+                const card = document.createElement('div');
+                card.className = 'reviewer-card waiting';
+                card.id = 'reviewer-card-' + i;
+                card.innerHTML = `
+                    <div class="reviewer-num">${emojis[i]}</div>
+                    <div class="reviewer-name">${name}</div>
+                    <div class="reviewer-status">待機中</div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        function setReviewerStatus(index, status, text) {
+            // 初回呼び出し時にカードを生成
+            if (!document.getElementById('reviewer-card-0')) {
+                renderReviewerCards();
+            }
+            const card = document.getElementById('reviewer-card-' + index);
+            if (!card) return;
+            card.className = 'reviewer-card ' + status;
+            card.querySelector('.reviewer-status').textContent = text;
+        }
+
+        // 専門家レビューパネル
+        function addExpertReviewPanel(index, name, review) {
+            const container = document.getElementById('reviewPanels');
+            const panel = document.createElement('div');
+            panel.className = 'panel';
+            panel.innerHTML = `
+                <div class="panel-header" onclick="togglePanel(this)">
+                    <h3>専門家${index + 1}: ${name}の視点チェック</h3>
+                    <span class="toggle">&#9660;</span>
+                </div>
+                <div class="panel-body">${escapeHtml(review)}</div>
+            `;
+            container.appendChild(panel);
+        }
+
+        // レビュアー批評パネル
+        function addReviewerPanel(index, name, review) {
+            const container = document.getElementById('reviewerPanels');
+            const panel = document.createElement('div');
+            panel.className = 'panel';
+            panel.innerHTML = `
+                <div class="panel-header" onclick="togglePanel(this)">
+                    <h3>${name}の批評</h3>
+                    <span class="toggle">&#9660;</span>
+                </div>
+                <div class="panel-body">${escapeHtml(review)}</div>
+            `;
+            container.appendChild(panel);
+        }
+
+        function togglePanel(header) {
+            const body = header.nextElementSibling;
+            const toggle = header.querySelector('.toggle');
+            body.classList.toggle('visible');
+            toggle.classList.toggle('open');
+        }
+
+        // コンテンツ表示
+        function showDraft(text) {
+            document.getElementById('draftPanel').style.display = 'block';
+            document.getElementById('draftContent').textContent = text;
+        }
+
+        function showOpinions(text) {
+            document.getElementById('opinionsPanel').style.display = 'block';
+            document.getElementById('opinionsContent').textContent = text;
+        }
+
+        function showRewrite(text) {
+            document.getElementById('rewritePanel').style.display = 'block';
+            document.getElementById('rewriteContent').textContent = text;
+        }
+
+        function showFactCheck(text) {
+            document.getElementById('factCheckPanel').style.display = 'block';
+            document.getElementById('factCheckContent').textContent = text;
+        }
+
+        function showReferenceList(text) {
+            document.getElementById('referencePanel').style.display = 'block';
+            document.getElementById('referenceContent').textContent = text;
+        }
+
+        function copyReference() {
+            const text = document.getElementById('referenceContent').textContent;
+            navigator.clipboard.writeText(text).then(() => {
+                const btn = event.target;
+                const orig = btn.textContent;
+                btn.textContent = 'コピーしました!';
+                setTimeout(() => { btn.textContent = orig; }, 2000);
+            });
+        }
+
+        function showFinal(text) {
+            document.getElementById('finalPanel').style.display = 'block';
+            document.getElementById('finalContent').textContent = text;
+        }
+
+        function showContinuation(msg) {
+            const banner = document.getElementById('completeBanner');
+            banner.textContent = '⏳ ' + msg;
+            banner.style.background = '#1e3a5f';
+            banner.style.color = '#93c5fd';
+            banner.classList.add('visible');
+        }
+
+        function showComplete(elapsed) {
+            const banner = document.getElementById('completeBanner');
+            banner.style.background = '#166534';
+            banner.style.color = '#86efac';
+            banner.textContent = `全7ステップ完了! 総処理時間: ${elapsed}秒`;
+            banner.classList.add('visible');
+        }
+
+        function copyFinal() {
+            const text = document.getElementById('finalContent').textContent;
+            navigator.clipboard.writeText(text).then(() => {
+                const btn = event.target;
+                btn.textContent = 'コピーしました!';
+                setTimeout(() => { btn.textContent = '最終原稿をコピー'; }, 2000);
+            });
+        }
+
+        // ユーティリティ
+        function showError(msg) {
+            const el = document.getElementById('errorMsg');
+            el.innerHTML = escapeHtml(msg);
+            el.classList.add('visible');
+        }
+
+        function showErrorWithResume(msg, cpId) {
+            const el = document.getElementById('errorMsg');
+            el.innerHTML = escapeHtml(msg) +
+                '<br><button class="error-resume-btn" onclick="resumeFromCheckpoint(\'' + cpId + '\')">💾 中断地点から再開する</button>' +
+                '<div style="font-size:0.78rem;color:#fca5a5;margin-top:0.4rem;">APIクレジットを補充してから再開してください</div>';
+            el.classList.add('visible');
+        }
+
+        function hideError() {
+            const el = document.getElementById('errorMsg');
+            el.innerHTML = '';
+            el.classList.remove('visible');
+        }
+
+        function resetButton() {
+            document.getElementById('btnRun').disabled = false;
+            document.getElementById('btnRun').textContent = 'ワークフロー開始';
+        }
+
+        function escapeHtml(str) {
+            return str
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        // ──────────────────────────────────
+        // 履歴機能
+        // ──────────────────────────────────
+
+        function loadHistory() {
+            fetch('/api/history')
+                .then(r => r.json())
+                .then(data => {
+                    const items = data.history || [];
+                    const section = document.getElementById('historySection');
+                    const list = document.getElementById('historyList');
+                    const count = document.getElementById('historyCount');
+                    count.textContent = items.length;
+                    if (items.length === 0) {
+                        section.classList.remove('visible');
+                        return;
+                    }
+                    section.classList.add('visible');
+                    list.innerHTML = '';
+                    items.forEach(h => {
+                        const div = document.createElement('div');
+                        div.className = 'history-item';
+                        div.innerHTML = `
+                            <div class="history-info">
+                                <div class="hi-date">${escapeHtml(h.completed_at || '')}</div>
+                                <div class="hi-title">${escapeHtml(h.title_preview || h.purpose_preview || '(タイトルなし)')}</div>
+                                <div class="hi-material">${escapeHtml((h.material_preview || '').substring(0, 60))}...</div>
+                                <div class="hi-elapsed">${h.total_elapsed ? h.total_elapsed + '秒' : ''}</div>
+                            </div>
+                            <div class="history-actions">
+                                <button class="btn-hist view" onclick="viewHistoryItem('${h.job_id}')">表示</button>
+                                <button class="btn-hist download" onclick="downloadHistory('${h.job_id}')">DL</button>
+                                <button class="btn-hist delete" onclick="deleteHistory('${h.job_id}')">✕</button>
+                            </div>
+                        `;
+                        list.appendChild(div);
+                    });
+                })
+                .catch(() => {});
+        }
+
+        function toggleHistorySection() {
+            const list = document.getElementById('historyList');
+            const toggle = document.getElementById('historyToggle');
+            if (list.style.display === 'none' || list.style.display === '') {
+                list.style.display = 'block';
+                toggle.classList.add('open');
+            } else {
+                list.style.display = 'none';
+                toggle.classList.remove('open');
+            }
+        }
+
+        function viewHistoryItem(jobId) {
+            fetch('/api/history/' + jobId)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.error) { showError(data.error); return; }
+
+                    document.getElementById('resultsSection').classList.add('visible');
+                    resetAllPanels();
+                    resetSteps();
+                    for (let i = 1; i <= 7; i++) completeStep(i);
+
+                    // 専門家カード
+                    const fields = data.fields || [];
+                    renderExpertCards(fields.map(f => ({ name: f.name, role_description: f.role_description })));
+                    fields.forEach((f, i) => setExpertStatus(i, 'done', '完了'));
+
+                    // 専門家レビュー
+                    const panels = document.getElementById('reviewPanels');
+                    panels.innerHTML = '';
+                    (data.expert_results || []).forEach((r, i) => {
+                        addExpertReviewPanel(r.index || i, r.field_name || '', r.review || '');
+                    });
+
+                    // 中間原稿
+                    if (data.draft) showDraft(data.draft);
+
+                    // レビュアーカード
+                    const reviewResults = data.review_results || [];
+                    if (reviewResults.length > 0) {
+                        renderReviewerCards();
+                        reviewResults.forEach((rv, i) => {
+                            setReviewerStatus(rv.index || i, 'done', '完了');
+                            addReviewerPanel(rv.index || i, rv.name || '', rv.review || '');
+                        });
+                    }
+
+                    // 意見選定
+                    if (data.selected_opinions) showOpinions(data.selected_opinions);
+
+                    // リライト
+                    if (data.rewritten_draft) showRewrite(data.rewritten_draft);
+
+                    // 参考文献リスト
+                    if (data.reference_list) showReferenceList(data.reference_list);
+
+                    // 最終原稿
+                    if (data.final) showFinal(data.final);
+
+                    // バナー
+                    const banner = document.getElementById('completeBanner');
+                    banner.style.background = '#1e3a5f';
+                    banner.style.color = '#93c5fd';
+                    banner.textContent = `📋 履歴から表示中 (${data.completed_at || ''} / ${data.total_elapsed || 0}秒)`;
+                    banner.classList.add('visible');
+
+                    document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth' });
+                })
+                .catch(err => showError('履歴の読み込みに失敗: ' + err.message));
+        }
+
+        function downloadHistory(jobId) {
+            window.location.href = '/api/download/' + jobId;
+        }
+
+        function deleteHistory(jobId) {
+            if (!confirm('この履歴を削除しますか？')) return;
+            fetch('/api/history/' + jobId, { method: 'DELETE' })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.ok) loadHistory();
+                    else showError(data.error || '削除に失敗しました');
+                })
+                .catch(err => showError('削除エラー: ' + err.message));
+        }
+
+        // ページ読み込み時に履歴を取得
+        loadHistory();
+    </script>
+</body>
+</html>
