@@ -1924,9 +1924,12 @@ async def run_triple_pipeline(
         total_start = time.time()
 
         if start_step > 1:
+            # 完了済みステップをフロントエンドに通知（UIのステップバッジを復元）
+            for restored in range(1, start_step):
+                event_queue.put({"type": "restore_step", "step": restored})
             event_queue.put({
                 "type": "continuation",
-                "message": f"チェックポイントからStep {start_step}より再開します",
+                "message": f"チェックポイントからStep {start_step}より再開します（Step 1〜{start_step - 1} は完了済み）",
             })
 
         # ──── Step 0: 自動リサーチ（auto_research=Trueかつ資料が空の場合） ────
@@ -2234,6 +2237,32 @@ def health_check():
 def get_checkpoints():
     """保存済みチェックポイント一覧を返す"""
     return jsonify({"checkpoints": list_checkpoints()})
+
+
+@app.route("/api/checkpoints/<cp_id>")
+def get_checkpoint_detail(cp_id):
+    """チェックポイントの詳細データ（途中結果の閲覧用）"""
+    data = load_checkpoint(cp_id)
+    if not data:
+        return jsonify({"error": "チェックポイントが見つかりません"}), 404
+    # 閲覧用に整形（大きなデータはプレビュー化）
+    detail = {
+        "id": cp_id,
+        "completed_step": data.get("completed_step", 0),
+        "tentative_title": data.get("tentative_title", ""),
+        "purpose": data.get("purpose", ""),
+        "material_preview": data.get("material", "")[:200],
+        "timestamp": data.get("timestamp", ""),
+        "fields": data.get("fields", []),
+        "expert_count": len(data.get("expert_results", [])),
+        "draft_count": len(data.get("drafts", [])),
+        "has_merged_draft": bool(data.get("merged_draft")),
+        "has_review": bool(data.get("review_results")),
+        "has_rewrite": bool(data.get("rewritten_draft")),
+        "merged_draft_preview": (data.get("merged_draft") or "")[:300],
+        "rewritten_draft_preview": (data.get("rewritten_draft") or "")[:300],
+    }
+    return jsonify(detail)
 
 
 @app.route("/api/history")

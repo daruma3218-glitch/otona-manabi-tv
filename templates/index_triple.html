@@ -412,10 +412,12 @@
 
         let expertNames = [], reviewerNames = [], lastCheckpointId = null;
 
-        // チェックポイント
-        (function loadCheckpoints() {
+        // チェックポイント読み込み（再利用可能）
+        function loadCheckpoints() {
             fetch('/api/checkpoints').then(r => r.json()).then(data => {
-                const cps = data.checkpoints || []; if (cps.length === 0) return;
+                const cps = data.checkpoints || [];
+                const section = document.getElementById('resumeSection');
+                if (cps.length === 0) { section.classList.remove('visible'); return; }
                 const list = document.getElementById('checkpointList'); list.innerHTML = '';
                 cps.forEach(cp => {
                     const div = document.createElement('div'); div.className = 'checkpoint-item';
@@ -423,12 +425,17 @@
                         <div><span class="cp-step">Step ${cp.completed_step || '?'}/8</span> — ${cp.timestamp || ''}</div>
                         <div class="cp-preview">${escapeHtml(cp.title_preview || '')} | ${escapeHtml(cp.material_preview || '').substring(0,50)}...</div>
                         ${cp.error ? '<div class="cp-error">エラー: '+escapeHtml(cp.error).substring(0,80)+'</div>' : ''}
-                    </div><button class="btn-resume" onclick="resumeFromCheckpoint('${cp.id}')">再開</button>`;
+                    </div>
+                    <div>
+                        <button class="btn-resume" onclick="viewCheckpointDetail('${cp.id}')" style="background:#475569;margin-right:4px;">📄 途中結果</button>
+                        <button class="btn-resume" onclick="resumeFromCheckpoint('${cp.id}')">▶ 再開</button>
+                    </div>`;
                     list.appendChild(div);
                 });
-                document.getElementById('resumeSection').classList.add('visible');
+                section.classList.add('visible');
             }).catch(() => {});
-        })();
+        }
+        loadCheckpoints();
 
         function resumeFromCheckpoint(cpId) {
             const apiKey = document.getElementById('apiKey').value.trim();
@@ -566,7 +573,13 @@
                         resetButton(); source.close(); break;
                 }
             };
-            source.onerror = () => { source.close(); };
+            source.onerror = () => {
+                source.close();
+                showError('⚠️ サーバーとの接続が切れました。Render無料プランではサーバーが自動スリープします。ページを更新して「再開」ボタンから途中のステップを再開できます。');
+                resetButton();
+                // チェックポイント一覧を再読み込みして再開ボタンを表示
+                setTimeout(loadCheckpoints, 1000);
+            };
         }
 
         // ステップ管理
@@ -660,6 +673,41 @@
             navigator.clipboard.writeText(document.getElementById('referenceContent').textContent).then(() => {
                 const btn = event.target; const o = btn.textContent; btn.textContent = 'コピーしました!'; setTimeout(() => { btn.textContent = o; }, 2000);
             });
+        }
+
+        // チェックポイント途中結果の表示
+        function viewCheckpointDetail(cpId) {
+            fetch('/api/checkpoints/' + cpId).then(r => r.json()).then(detail => {
+                if (detail.error) { showError(detail.error); return; }
+                let html = `<h3 style="color:#fbbf24;margin-bottom:0.8rem;">📋 チェックポイント途中結果 (Step ${detail.completed_step}/8)</h3>`;
+                html += `<div style="margin-bottom:0.5rem;"><strong>タイトル:</strong> ${escapeHtml(detail.tentative_title)}</div>`;
+                html += `<div style="margin-bottom:0.5rem;"><strong>目的:</strong> ${escapeHtml(detail.purpose)}</div>`;
+                html += `<div style="margin-bottom:0.5rem;"><strong>時刻:</strong> ${detail.timestamp}</div>`;
+                if (detail.fields && detail.fields.length > 0) {
+                    html += `<div style="margin-bottom:0.5rem;"><strong>選定分野:</strong> ${detail.fields.map(f => escapeHtml(typeof f === 'string' ? f : f.field || JSON.stringify(f))).join(', ')}</div>`;
+                }
+                if (detail.expert_count > 0) html += `<div style="margin-bottom:0.5rem;"><strong>専門家意見:</strong> ${detail.expert_count}件 収集済み ✅</div>`;
+                if (detail.draft_count > 0) html += `<div style="margin-bottom:0.5rem;"><strong>原稿:</strong> ${detail.draft_count}本 作成済み ✅</div>`;
+                if (detail.has_merged_draft) html += `<div style="margin-bottom:0.5rem;"><strong>統合原稿:</strong> 完成 ✅</div>`;
+                if (detail.merged_draft_preview) html += `<div style="margin-bottom:0.5rem;background:#0f172a;padding:0.8rem;border-radius:6px;font-size:0.85rem;max-height:200px;overflow-y:auto;"><strong>統合原稿プレビュー:</strong><br>${escapeHtml(detail.merged_draft_preview)}...</div>`;
+                if (detail.has_review) html += `<div style="margin-bottom:0.5rem;"><strong>批評:</strong> 完了 ✅</div>`;
+                if (detail.has_rewrite) html += `<div style="margin-bottom:0.5rem;"><strong>リライト:</strong> 完了 ✅</div>`;
+                if (detail.rewritten_draft_preview) html += `<div style="margin-bottom:0.5rem;background:#0f172a;padding:0.8rem;border-radius:6px;font-size:0.85rem;max-height:200px;overflow-y:auto;"><strong>リライト原稿プレビュー:</strong><br>${escapeHtml(detail.rewritten_draft_preview)}...</div>`;
+                html += `<div style="margin-top:1rem;"><button class="btn-resume" onclick="resumeFromCheckpoint('${cpId}')">▶ ここから再開</button></div>`;
+                // モーダル表示
+                let modal = document.getElementById('cpDetailModal');
+                if (!modal) {
+                    modal = document.createElement('div'); modal.id = 'cpDetailModal';
+                    modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:1000;display:flex;align-items:center;justify-content:center;';
+                    modal.onclick = (e) => { if (e.target === modal) modal.style.display = 'none'; };
+                    document.body.appendChild(modal);
+                }
+                modal.innerHTML = `<div style="background:#1e293b;border:1px solid #475569;border-radius:12px;padding:1.5rem;max-width:700px;width:90%;max-height:80vh;overflow-y:auto;color:#e2e8f0;">
+                    ${html}
+                    <div style="text-align:right;margin-top:1rem;"><button onclick="document.getElementById('cpDetailModal').style.display='none'" style="padding:0.4rem 1rem;background:#475569;color:#e2e8f0;border:none;border-radius:6px;cursor:pointer;">閉じる</button></div>
+                </div>`;
+                modal.style.display = 'flex';
+            }).catch(err => showError('途中結果の読み込みに失敗: ' + err.message));
         }
 
         // ユーティリティ
