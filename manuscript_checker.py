@@ -43,7 +43,7 @@ HISTORY_DIR.mkdir(exist_ok=True)
 MAX_HISTORY = 50
 
 # デフォルト設定
-DEFAULT_MODEL = "claude-sonnet-4-6"
+DEFAULT_MODEL = "claude-sonnet-5"
 INTEGRATION_MODEL = "claude-opus-4-7"
 EXPERT_MAX_TOKENS = 12000      # ディープリサーチ: 情報量拡大
 REVIEWER_MAX_TOKENS = 6000     # 批評家も簡潔に
