@@ -7,10 +7,10 @@ from __future__ import annotations
 7ステップ:
   Step 1: 分野選定
   Step 2: 情報収集（自動選定3人 + 指標のプロ + 具体論のプロ）
-  Step 3: 原稿化 (Opus 4.6) — 4章構成YouTube原稿
+  Step 3: 原稿化 (Opus 4.8) — 4章構成YouTube原稿
   Step 4: 批評フェーズ（批評家 + 評論家 + アドバイザー + コピーライター 並列）
-  Step 5: 意見選定 (Opus 4.6) — コンセプトに沿う意見を取捨選択 + タイトル選定
-  Step 6: リライト (Opus 4.6) — 選定意見反映
+  Step 5: 意見選定 (Opus 4.8) — コンセプトに沿う意見を取捨選択 + タイトル選定
+  Step 6: リライト (Opus 4.8) — 選定意見反映
   Step 7: ファクトチェック (Sonnet + Web検索)
 
 使い方:
@@ -44,7 +44,7 @@ MAX_HISTORY = 50
 
 # デフォルト設定
 DEFAULT_MODEL = "claude-sonnet-5"
-INTEGRATION_MODEL = "claude-opus-4-7"
+INTEGRATION_MODEL = "claude-opus-4-8"
 EXPERT_MAX_TOKENS = 12000      # ディープリサーチ: 情報量拡大
 REVIEWER_MAX_TOKENS = 6000     # 批評家も簡潔に
 OPINION_MAX_TOKENS = 8000      # 意見選定

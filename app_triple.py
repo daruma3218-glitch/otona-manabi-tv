@@ -66,7 +66,7 @@ MAX_CONCURRENT_API_CALLS = 5
 # 設定
 # ──────────────────────────────────────────────
 DEFAULT_MODEL = "claude-sonnet-5"
-INTEGRATION_MODEL = "claude-opus-4-7"
+INTEGRATION_MODEL = "claude-opus-4-8"
 EXPERT_MAX_TOKENS = 12000      # ディープリサーチ: 情報量拡大
 REVIEWER_MAX_TOKENS = 6000     # 批評家も簡潔に
 OPINION_MAX_TOKENS = 8000      # 意見選定
@@ -1498,7 +1498,7 @@ async def run_expert_review(client, material: str, field: dict, index: int, mode
 
 # --- Step 3: 原稿化 ---
 async def draft_manuscript(client, material: str, expert_results: list[dict], tentative_title: str, purpose: str, event_queue, semaphore: asyncio.Semaphore | None = None) -> str:
-    """専門家チェック結果を踏まえて原稿を作成（Opus 4.6）"""
+    """専門家チェック結果を踏まえて原稿を作成（Opus 4.8）"""
     event_queue.put({"type": "step", "step": 3, "message": f"4章構成の原稿を作成中...（{INTEGRATION_MODEL}）"})
 
     expert_reviews_text = ""
